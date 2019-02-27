@@ -43,6 +43,7 @@ if __name__ == "__main__":
         url="https://github.com/geoffrey-a-reed/TCIA",
         zip_safe=False,
         packages=setuptools.find_packages(exclude=["tests"], ),
+        include_package_data=True,
         python_requires=">=3.6",
         install_requires=[
             "requests>=2.21"
