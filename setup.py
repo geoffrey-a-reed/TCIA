@@ -51,6 +51,11 @@ if __name__ == "__main__":
         tests_require=[
             "pytest>=4.3"
         ],
+        entry_points={
+            "console_scripts": [
+                "tcia-client = tcia.cli:main"
+            ]
+        },
         classifiers=[
             "Development Status :: 3 - Alpha",
             "Environment :: Console",

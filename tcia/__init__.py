@@ -12,9 +12,13 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
+from tcia import api
+from tcia import cli
 from tcia._version import __version__
 
 
 __all__ = [
+    "api",
+    "cli",
     "__version__"
 ]
