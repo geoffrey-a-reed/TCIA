@@ -12,10 +12,12 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
-import setuptools
+import pkg_resources
 
 
-__all__ = []
+__all__ = ["get_version"]
 
-if __name__ == "__main__":
-    setuptools.setup()
+
+def get_version():
+    bytes_ = pkg_resources.resource_string("tcia", "VERSION")
+    return bytes_.decode("utf-8")

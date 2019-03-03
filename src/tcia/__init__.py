@@ -12,3 +12,11 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
+import pkg_resources
+
+from tcia import api
+from tcia import _version
+
+
+__all__ = ["api"]
+__version__ = _version.get_version()

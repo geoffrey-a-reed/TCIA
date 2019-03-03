@@ -12,10 +12,10 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
-import setuptools
+from tcia import _cli
 
 
 __all__ = []
 
 if __name__ == "__main__":
-    setuptools.setup()
+    _cli.main()

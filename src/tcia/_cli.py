@@ -12,13 +12,12 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
-"""Command line interface for The Cancer Imaging Archive REST client."""
 import click
 
-import tcia
-from tcia import api
+
+__all__ = ["main"]
 
 
 @click.command()
 def main():
-    print(f"CLI 'hello world' for TCIA client {tcia.__version__}")
+    print("Hello, world!")
