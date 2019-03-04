@@ -12,27 +12,36 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 # ----------------------------------------------------------------------
+import os
+
 from tcia import _resources
 
 
-__all__ = ["TCIAClient"]
+__all__ = ["Client"]
 
 
-class TCIAClient:
+class Client:
     def __init__(
         self,
-        api_key,
+        api_key=None,
         *,
-        base_url="https://services.cancerimagingarchive.net/services/v3"
+        base_url="https://services.cancerimagingarchive.net/services/v3",
     ):
+        if api_key is None:
+            try:
+                api_key = os.environ["TCIA_API_KEY"]
+            except KeyError:
+                raise TypeError(
+                    (
+                        "environmental variable 'TCIA_API_KEY' must be set or "
+                        "keyword argument 'api_key' must not be None"
+                    )
+                )
         self._api_key = api_key
         self._base_url = base_url
 
     def __repr__(self):
-        pass
-
-    def __str__(self):
-        pass
+        return f"{self.__class__.__name__}('{self._api_key}')"
 
     @property
     def api_key(self):
@@ -64,9 +73,7 @@ class TCIAClient:
 
     @property
     def patients_by_modality(self):
-        return _resources.PatientsByModalityResource(
-            self.api_key, self.base_url
-        )
+        return _resources.PatientsByModalityResource(self.api_key, self.base_url)
 
     @property
     def patient_studies(self):
@@ -86,9 +93,7 @@ class TCIAClient:
 
     @property
     def new_patients_in_collection(self):
-        return _resources.NewPatientsInCollectionResource(
-            self.api_key, self.base_url
-        )
+        return _resources.NewPatientsInCollectionResource(self.api_key, self.base_url)
 
     @property
     def new_studies_in_patient_collection(self):

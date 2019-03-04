@@ -15,12 +15,7 @@
 import requests
 
 
-__all__ = [
-    "get_text",
-    "get_content_iter",
-    "write_text",
-    "write_streaming_content",
-]
+__all__ = ["get_text", "get_content_iter", "write_text", "write_streaming_content"]
 
 
 def _filter_none_from_dict(dict_):
