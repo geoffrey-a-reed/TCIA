@@ -15,8 +15,9 @@
 import pkg_resources
 
 from tcia import api
+from tcia.api import Client
 from tcia import _version
 
 
-__all__ = ["api"]
+__all__ = ["api", "Client"]
 __version__ = _version.get_version()

@@ -14,7 +14,6 @@
 # ----------------------------------------------------------------------
 import json
 
-from tcia import _errors
 from tcia import _types
 from tcia import _utils
 
@@ -37,6 +36,9 @@ __all__ = [
 
 
 class _Resource:
+
+    _required_params = []
+
     def __init__(self, api_key, base_url, *, resource, endpoint):
         self._api_key = api_key
         self._base_url = base_url
@@ -46,7 +48,6 @@ class _Resource:
         self._url = f"{base_url}/{resource}/query/{endpoint}"
         self._params = {}
         self._metadata = None
-        self._configured = False
 
     def __repr__(self):
         return (
@@ -54,121 +55,188 @@ class _Resource:
             f"resource='{self._resource}'', endpoint='{self._endpoint}')"
         )
 
-    def configure(self):
-        self._configured = True
+    def __call__(self):
         return self
 
-    def _check_is_configured(self):
-        if not self._configured:
-            raise _errors.ConfigurationError(
-                ".configure() must be called before .get() or .download()"
-            )
+    @classmethod
+    def _check_required_params(cls, params):
+        for param in cls._required_params:
+            if params.get(param) is None:
+                raise TypeError(
+                    f"required param '{param}' must be set using "
+                    f"{cls.__name__}().__call__() prior to call to "
+                    f"{cls.__name__}().get() or {cls.__name__}().download()"
+                )
 
     @property
     def metadata(self):
         if self._metadata is None:
             url = f"{self._url}/metadata"
             text = _utils.get_text(url, headers=self._headers)
-            metadata = json.loads(text)
+            data = json.loads(text)
+            metadata = _types.Metadata(
+                query_name=data["QueryName"],
+                description=data["Description"],
+                parameters=[param for param in data["Parameters"]],
+                result=_types.Result(
+                    name=data["Result"]["Name"],
+                    description=data["Result"]["Description"],
+                    attributes=[
+                        _types.Attribute(
+                            name=attr["Name"],
+                            description=attr["Description"],
+                            dicom=attr["DICOM"],
+                        )
+                        for attr in data["Result"]["Attributes"]
+                    ],
+                ),
+            )
             self._metadata = metadata
-
         return self._metadata
 
 
 class _TextResource(_Resource):
 
     _formats = ["csv", "html", "xml", "json"]
+    _required_params = []
 
     @classmethod
     def _check_format(cls, format_):
         if not format_ in cls._formats:
-            raise _errors.FormatError()
+            raise TypeError(
+                f"invalid format_ '{format_}': try one of {cls._formats}"
+            )
 
     def get(self):
-        self._check_is_configured()
-
+        self.__class__._check_required_params(self._params)
         self._params.update({"format": "json"})
-        text = _utils.get_text(self._url, headers=self._headers, params=self._params)
+        text = _utils.get_text(
+            self._url, headers=self._headers, params=self._params
+        )
         data = json.loads(text)
         return data
 
-    def download(self, path_or_buffer, format_="csv", *, mode="wt", encoding="utf-8"):
-        self._check_is_configured()
+    def download(
+        self, path_or_buffer, format_="csv", *, mode="wt", encoding="utf-8"
+    ):
+        self.__class__._check_required_params(self._params)
         self.__class__._check_format(format_)
-
         self._params.update({"format": format_})
-        text = _utils.get_text(self._url, headers=self._headers, params=self._params)
+        text = _utils.get_text(
+            self._url, headers=self._headers, params=self._params
+        )
         _utils.write_text(text, path_or_buffer, mode=mode, encoding=encoding)
 
 
 class _BytesResource(_Resource):
-    def download(self, path_or_buffer, chunk_size=1024, *, mode="wb"):
-        self._check_is_configured()
 
+    _required_params = []
+
+    def download(self, path_or_buffer, chunk_size=1024, *, mode="wb"):
+        self.__class__._check_required_params(self._params)
         content_iter = _utils.get_content_iter(
-            self._url, headers=self._headers, params=self._params, chunk_size=chunk_size
+            self._url,
+            headers=self._headers,
+            params=self._params,
+            chunk_size=chunk_size,
         )
         _utils.write_streaming_content(content_iter, path_or_buffer, mode=mode)
 
 
 class CollectionsResource(_TextResource):
     def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="getCollectionValues"
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="getCollectionValues",
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
     def get(self):
-        self._configured = True
         data = super().get()
-        collections = [element.get("Collection") for element in data]
+        collections = [
+            _types.Collection(collection=element.get("Collection"))
+            for element in data
+        ]
         return collections
 
 
 class ModalitiesResource(_TextResource):
     def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="getModalityValues"
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="getModalityValues",
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, collection=None, body_part_examined=None):
+    def __call__(self, *, collection=None, body_part_examined=None):
         self._params.update(
             {"Collection": collection, "BodyPartExamined": body_part_examined}
         )
-        self._configured = True
         return self
 
     def get(self):
-        self._configured = True
         data = super().get()
-        modalities = [element.get("Modality") for element in data]
+        modalities = [
+            _types.Modality(modality=element.get("Modality"))
+            for element in data
+        ]
         return modalities
 
 
-class BodyPartsResource(_TextResource):
+class BodyPartsExaminedResource(_TextResource):
     def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="getBodyPartValues"
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="getBodyPartValues",
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, collection=None, modality=None):
+    def __call__(self, *, collection=None, modality=None):
         self._params.update({"Collection": collection, "Modality": modality})
-        self._configured = True
         return self
 
     def get(self):
-        self._configured = True
         data = super().get()
-        body_parts = [element.get("BodyPartExamined") for element in data]
-        return body_parts
+        body_parts_examined = [
+            _types.BodyPartExamined(
+                body_part_examined=element.get("BodyPartExamined")
+            )
+            for element in data
+        ]
+        return body_parts_examined
 
 
 class ManufacturersResource(_TextResource):
     def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="getManufacturerValues"
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="getManufacturerValues",
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, collection=None, modality=None, body_part_examined=None):
+    def __call__(
+        self, *, collection=None, modality=None, body_part_examined=None
+    ):
         self._params.update(
             {
                 "Collection": collection,
@@ -176,61 +244,74 @@ class ManufacturersResource(_TextResource):
                 "BodyPartExamined": body_part_examined,
             }
         )
-        self._configured = True
         return self
 
     def get(self):
-        self._configured = True
         data = super().get()
-        manufacturers = [element.get("Manufacturer") for element in data]
+        manufacturers = [
+            _types.Manufacturer(manufacturer=element.get("Manufacturer"))
+            for element in data
+        ]
         return manufacturers
 
 
 class PatientsResource(_TextResource):
-    def __init__(self, api_key, base_url, *, resource="TCIA", endpoint="getPatient"):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+    def __init__(
+        self, api_key, base_url, *, resource="TCIA", endpoint="getPatient"
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, collection=None):
+    def __call__(self, *, collection=None):
         self._params.update({"Collection": collection})
-        self._configured = True
         return self
 
     def get(self):
-        self._configured = True
         data = super().get()
-        patients = []
-        for item in data:
-            patient = _types.Patient(
-                id_=item.get("PatientID"),
-                name=item.get("PatientName"),
-                sex=item.get("PatientSex"),
-                collection=item.get("Collection")
+        patients = [
+            _types.Patient(
+                patient_id=element.get("PatientID"),
+                patient_name=element.get("PatientName"),
+                patient_sex=element.get("PatientSex"),
+                collection=element.get("Collection"),
             )
+            for element in data
+        ]
         return patients
 
 
 class PatientsByModalityResource(_TextResource):
-    def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="PatientsByModality"
-    ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, collection, modality):
+    _required_params = ["Collection", "Modality"]
+
+    def __init__(
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="PatientsByModality",
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, collection, modality):
         self._params.update({"Collection": collection, "Modality": modality})
-        self._configured = True
         return self
 
     def get(self):
         data = super().get()
-        patients = []
-        for item in data:
-            patient = _types.Patient(
-                id_=item.get("PatientID"),
-                name=item.get("PatientName"),
-                sex=item.get("PatientSex"),
-                collection=item.get("Collection")
+        patient_by_modality = [
+            _types.PatientByModality(
+                patient_id=element.get("PatientID"),
+                patient_name=element.get("PatientName"),
+                patient_sex=element.get("PatientSex"),
+                collection=element.get("Collection"),
             )
-            patients.append(patient)
+            for element in data
+        ]
         return patients
 
 
@@ -238,9 +319,13 @@ class PatientStudiesResource(_TextResource):
     def __init__(
         self, api_key, base_url, *, resource="TCIA", endpoint="getPatientStudy"
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, collection=None, patient_id=None, study_instance_uid=None):
+    def __call__(
+        self, *, collection=None, patient_id=None, study_instance_uid=None
+    ):
         self._params.update(
             {
                 "Collection": collection,
@@ -248,33 +333,36 @@ class PatientStudiesResource(_TextResource):
                 "StudyInstanceUID": study_instance_uid,
             }
         )
-        self._configured = True
         return self
 
     def get(self):
-        self._configured = True
         data = super().get()
-        patient_studies = []
-        for item in data:
-            patient_study = _types.PatientStudy(
-                patient_age=item.get("PatientAge"),
-                patient_id=item.get("PatientID"),
-                patient_name=item.get("PatientName"),
-                patient_sex=item.get("PatientSex"),
-                series_count=item.get("SeriesCount"),
-                study_date=item.get("StudyDate"),
-                study_description=item.get("StudyDescription"),
-                study_instance_uid=item.get("StudyInstanceUID")
+        patient_studies = [
+            _types.PatientStudy(
+                study_instance_uid=element.get("StudyInstanceUID"),
+                study_date=element.get("StudyDate"),
+                study_description=element.get("StudyDescription"),
+                patient_age=element.get("PatientAge"),
+                patient_id=element.get("PatientID"),
+                patient_name=element.get("PatientName"),
+                patient_sex=element.get("PatientSex"),
+                collection=element.get("Collection"),
+                series_count=element.get("SeriesCount"),
             )
-            patient_studies.append(patient_study)
+            for element in data
+        ]
         return patient_studies
 
 
 class SeriesResource(_TextResource):
-    def __init__(self, api_key, base_url, *, resource="TCIA", endpoint="getSeries"):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+    def __init__(
+        self, api_key, base_url, *, resource="TCIA", endpoint="getSeries"
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(
+    def __call__(
         self,
         *,
         collection=None,
@@ -296,92 +384,113 @@ class SeriesResource(_TextResource):
                 "Manufacturer": manufacturer,
             }
         )
-        self._configured = True
         return self
-    
+
     def get(self):
-        self._configured = True
         data = super().get()
-        series_list = []
-        for item in data:
-            series = _types.Series(
-                annotations_flag=item.get("AnnotationsFlag"),
-                body_part_examined=item.get("BodyPartExamined"),
-                collection=item.get("Collection"),
-                image_count=item.get("ItemCount"),
-                manufacturer=item.get("Manufacturer"),
-                manufacturer_model_name=item.get("ManufacturerModelName"),
-                modality=item.get("Modality"),
-                protocol_name=item.get("ProtocolName"),
-                series_date=item.get("SeriesDate"),
-                series_description=item.get("SeriesDescription"),
-                series_instance_uid=item.get("SeriesInstanceUID"),
-                series_number=item.get("SeriesNumber"),
-                software_version=item.get("SoftwareVersion"),
-                study_instance_uid=item.get("StudyInstanceUID"),
-                visibility=item.get("Visibility")
+        series_list = [
+            _types.Series(
+                series_instance_uid=element.get("SeriesInstanceUID"),
+                study_instance_uid=element.get("StudyInstanceUID"),
+                modality=element.get("Modality"),
+                protocol_name=element.get("ProtocolName"),
+                series_date=element.get("SeriesDate"),
+                series_description=element.get("SeriesDescription"),
+                body_part_examined=element.get("BodyPartExamined"),
+                series_number=element.get("SeriesNumber"),
+                annotations_flag=element.get("AnnotationsFlag"),
+                collection=element.get("Collection"),
+                patient_id=element.get("PatientID"),
+                manufacturer=element.get("Manufacturer"),
+                manufacturer_model_name=element.get("ManufacturerModelName"),
+                software_version=element.get("SoftwareVersion"),
+                image_count=element.get("ImageCount"),
             )
-            series_list.append(series)
+            for element in data
+        ]
         return series_list
 
 
 class SeriesSizeResource(_TextResource):
-    def __init__(self, api_key, base_url, *, resource="TCIA", endpoint="getSeriesSize"):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, series_instance_uid):
+    _required_params = ["SeriesInstanceUID"]
+
+    def __init__(
+        self, api_key, base_url, *, resource="TCIA", endpoint="getSeriesSize"
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, series_instance_uid):
         self._params.update({"SeriesInstanceUID": series_instance_uid})
-        self._configured = True
         return self
 
     def get(self):
         data = super().get()
-        series_sizes = []
-        for item in data:
-            series_size = _types.SeriesSize(
-                total_size_in_bytes=item.get("TotalSizeInBytes"),
-                object_count=item.get("ObjectCount")
+        series_sizes = [
+            _types.SeriesSize(
+                total_size_in_bytes=element.get("TotalSizeInBytes"),
+                object_count=element.get("ObjectCount"),
             )
-            series_sizes.append(series_size)
+            for element in data
+        ]
         return series_sizes
 
 
 class ImagesResource(_BytesResource):
-    def __init__(self, api_key, base_url, *, resource="TCIA", endpoint="getImage"):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, series_instance_uid):
+    _required_params = ["SeriesInstanceUID"]
+
+    def __init__(
+        self, api_key, base_url, *, resource="TCIA", endpoint="getImage"
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, series_instance_uid):
         self._params.update({"SeriesInstanceUID": series_instance_uid})
-        self._configured = True
         return self
 
 
 class NewPatientsInCollectionResource(_TextResource):
-    def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="NewPatientsInCollection"
-    ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, date, collection):
+    _required_params = ["Date", "Collection"]
+
+    def __init__(
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="NewPatientsInCollection",
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, date, collection):
         self._params.update({"Date": date, "Collection": collection})
         self._configured = True
         return self
-    
+
     def get(self):
         data = super().get()
-        patients = []
-        for item in data:
-            patient = _types.Patient(
-                id_=item.get("PatientID"),
-                name=item.get("PatientName"),
-                sex=item.get("PatientSex"),
-                collection=item.get("Collection")
+        new_patients_in_collection = [
+            _types.NewPatientInCollection(
+                patient_id=element.get("PatientID"),
+                collection=element.get("Collection"),
             )
-            patients.append(patient)
-        return patients
+            for element in data
+        ]
+        return new_patients_in_collection
 
 
 class NewStudiesInPatientCollectionResource(_TextResource):
+
+    _required_params = ["Date", "Collection"]
+
     def __init__(
         self,
         api_key,
@@ -390,79 +499,101 @@ class NewStudiesInPatientCollectionResource(_TextResource):
         resource="TCIA",
         endpoint="NewStudiesInPatientCollection",
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, date, collection, patient_id=None):
+    def __call__(self, *, date, collection, patient_id=None):
         self._params.update(
             {"Date": date, "Collection": collection, "PateintID": patient_id}
         )
-        self._configured = True
         return self
 
     def get(self):
         data = super().get()
-        patient_studies = []
-        for item in data:
-            patient_study = _types.PatientStudy(
-                patient_age=item.get("PatientAge"),
-                patient_id=item.get("PatientID"),
-                patient_name=item.get("PatientName"),
-                patient_sex=item.get("PatientSex"),
-                series_count=item.get("SeriesCount"),
-                study_date=item.get("StudyDate"),
-                study_description=item.get("StudyDescription"),
-                study_instance_uid=item.get("StudyInstanceUID")
+        new_studies_in_patient_collection = [
+            _types.NewStudyInPatientCollection(
+                patient_id=element.get("PatientID"),
+                collection=element.get("Collection"),
+                study_instance_uid=element.get("StudyInstanceUID"),
             )
-            patient_studies.append(patient_study)
-        return patient_studies
+            for element in data
+        ]
+        return new_studies_in_patient_collection
 
 
 class SOPInstanceUIDsResource(_TextResource):
-    def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="getSOPInstanceUIDs"
-    ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, series_instance_uid):
+    _required_params = ["SeriesInstanceUID"]
+
+    def __init__(
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="TCIA",
+        endpoint="getSOPInstanceUIDs",
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, series_instance_uid):
         self._params.update({"SeriesInstanceUID": series_instance_uid})
-        self._configured = True
         return self
-    
+
     def get(self):
-        self._configured = True
         data = super().get()
-        sop_instance_uids = [item.get("SOPInstanceUID") for item in data]
+        sop_instance_uids = [
+            _types.SOPInstanceUID(
+                sop_instance_uid=element.get("SOPInstanceUID")
+            )
+            for element in data
+        ]
         return sop_instance_uids
 
 
 class SingleImageResource(_BytesResource):
+
+    _required_params = ["SeriesInstanceUID", "SOPInstanceUID"]
+
     def __init__(
         self, api_key, base_url, *, resource="TCIA", endpoint="getSingleImage"
     ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
 
-    def configure(self, *, series_instance_uid, sop_instance_uid):
+    def __call__(self, *, series_instance_uid, sop_instance_uid):
         self._params.update(
             {
                 "SeriesInstanceUID": series_instance_uid,
                 "SOPInstanceUID": sop_instance_uid,
             }
         )
-        self._configured = True
         return self
 
 
 class ContentsByNameResource(_TextResource):
-    def __init__(
-        self, api_key, base_url, *, resource="TCIA", endpoint="ContentsByName"
-    ):
-        super().__init__(api_key, base_url, resource=resource, endpoint=endpoint)
 
-    def configure(self, *, name):
+    _required_params = ["name"]
+
+    def __init__(
+        self,
+        api_key,
+        base_url,
+        *,
+        resource="SharedList",
+        endpoint="ContentsByName",
+    ):
+        super().__init__(
+            api_key, base_url, resource=resource, endpoint=endpoint
+        )
+
+    def __call__(self, *, name):
         self._params.update({"name": name})
-        self._configured = True
         return self
-    
+
     def get(self):
         data = super().get()
         return data

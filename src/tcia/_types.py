@@ -15,53 +15,96 @@
 import collections
 
 
-__all__ = ["Patient", "PatientStudy", "Series"]
+__all__ = [
+    "Attribute",
+    "BodyPartExamined",
+    "Collection",
+    "Manufacturer",
+    "Metadata",
+    "Modality",
+    "Patient",
+    "PatientStudy",
+    "Result",
+    "Series",
+]
 
+Collection = collections.namedtuple("Collection", ["collection"])
+
+Modality = collections.namedtuple("Modality", ["modality"])
+
+BodyPartExamined = collections.namedtuple(
+    "BodyPartExamined", ["body_part_examined"]
+)
+
+Manufacturer = collections.namedtuple("Manufacturer", ["manufacturer"])
+
+Metadata = collections.namedtuple(
+    "Metadata", ["query_name", "description", "parameters", "result"]
+)
+
+Result = collections.namedtuple(
+    "Result", ["name", "description", "attributes"]
+)
+
+Attribute = collections.namedtuple(
+    "Attribute", ["name", "description", "dicom"]
+)
 
 Patient = collections.namedtuple(
-    "Patient",
-    ["id_", "name", "sex", "collection"]
+    "Patient", ["patient_id", "patient_name", "patient_sex", "collection"]
+)
+
+PatientByModality = collections.namedtuple(
+    "PatientByModality", ["id_", "collection", "modality"]
 )
 
 PatientStudy = collections.namedtuple(
     "PatientStudy",
     [
+        "study_instance_uid",
+        "study_date",
+        "study_description",
         "patient_age",
         "patient_id",
         "patient_name",
         "patient_sex",
+        "collection",
         "series_count",
-        "study_date",
-        "study_description",
-        "study_instance_uid",
-    ]
+    ],
 )
 
 Series = collections.namedtuple(
     "Series",
     [
-        "annotations_flag",
-        "body_part_examined",
-        "collection",
-        "image_count",
-        "manufacturer",
-        "manufacturer_model_name",
+        "series_instance_uid",
+        "study_instance_uid",
         "modality",
         "protocol_name",
         "series_date",
         "series_description",
-        "series_instance_uid",
+        "body_part_examined",
         "series_number",
+        "annotations_flag",
+        "collection",
+        "patient_id",
+        "manufacturer",
+        "manufacturer_model_name",
         "software_version",
-        "study_instance_uid",
-        "visibility",
-    ]
+        "image_count",
+    ],
 )
 
 SeriesSize = collections.namedtuple(
-    "SeriesSize",
-    [
-        "total_size_in_bytes",
-        "object_count",
-    ]
+    "SeriesSize", ["total_size_in_bytes", "object_count"]
 )
+
+NewPatientInCollection = collections.namedtuple(
+    "NewPatientInCollection", ["patient_id", "collection"]
+)
+
+NewStudyInPatientCollection = collections.namedtuple(
+    "NewStudyInPatientCollection",
+    ["patient_id", "collection", "study_instance_uid"],
+)
+
+SOPInstanceUID = collections.namedtuple("SOPInstanceUID", ["sop_instance_uid"])

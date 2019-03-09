@@ -60,8 +60,10 @@ class Client:
         return _resources.ModalitiesResource(self.api_key, self.base_url)
 
     @property
-    def body_parts(self):
-        return _resources.BodyPartsResource(self.api_key, self.base_url)
+    def body_parts_examined(self):
+        return _resources.BodyPartsExaminedResource(
+            self.api_key, self.base_url
+        )
 
     @property
     def manufacturers(self):
@@ -73,7 +75,9 @@ class Client:
 
     @property
     def patients_by_modality(self):
-        return _resources.PatientsByModalityResource(self.api_key, self.base_url)
+        return _resources.PatientsByModalityResource(
+            self.api_key, self.base_url
+        )
 
     @property
     def patient_studies(self):
@@ -85,7 +89,7 @@ class Client:
 
     @property
     def series_size(self):
-        return _resources.SeriesSize(self.api_key, self.base_url)
+        return _resources.SeriesSizeResource(self.api_key, self.base_url)
 
     @property
     def images(self):
@@ -93,7 +97,9 @@ class Client:
 
     @property
     def new_patients_in_collection(self):
-        return _resources.NewPatientsInCollectionResource(self.api_key, self.base_url)
+        return _resources.NewPatientsInCollectionResource(
+            self.api_key, self.base_url
+        )
 
     @property
     def new_studies_in_patient_collection(self):
