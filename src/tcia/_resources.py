@@ -546,7 +546,9 @@ class SOPInstanceUIDsResource(_TextResource):
         data = super().get()
         sop_instance_uids = [
             _types.SOPInstanceUID(
-                sop_instance_uid=element.get("SOPInstanceUID")
+                # API documentation inconsistent: "sop_instance_uid" not
+                #   "SOPInstanceUID". Reason unknown.
+                sop_instance_uid=element.get("sop_instance_uid")
             )
             for element in data
         ]
